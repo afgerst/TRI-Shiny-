@@ -1,5 +1,3 @@
-# loading the libraries
-
 # For creating the interactive app
 library(shiny)
 library(shinydashboard)
@@ -8,10 +6,8 @@ library(shinydashboard)
 library(maps) 
 library(leaflet)
 
-
 # For filtering data
 library(dplyr)
-
 
 # Reading in data file
 TRI2022 <- read.csv("2022_us.csv")
@@ -22,23 +18,69 @@ TRI2022 <- TRI2022 %>%
          CLASSIFICATION, METAL, CARCINOGEN, PBT, PFAS, UNIT.OF.MEASURE, FUGITIVE.AIR, STACK.AIR, WATER, UNDERGROUND, LANDFILLS,
          ON.SITE.RELEASE.TOTAL, OFF.SITE.RELEASE.TOTAL, PRODUCTION.RATIO)
 
-ui <- fluidPage(
-  
-  titlePanel("TRI Zip input test"),
-  
-  sidebarLayout(  
-    sidebarPanel(
-      textInput("zip_input", "Enter Zip Code:", ""),
-      actionButton("submit_btn", "Submit") # So far this is useless, the map changes as soon as a zip is entered
-    ),
-    mainPanel(
-      leafletOutput("mymap", height = "80vh")  
+
+
+ui <- dashboardPage(
+  dashboardHeader(title = "TRI"),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Page 1", tabName = "page1"),
+      menuItem("Page 2", tabName = "page2")
     )
+  ),
+  dashboardBody(
+    tabItems(
+      tabItem(tabName = "page1",
+              h2("Page 1"),
+              sidebarLayout(  
+                sidebarPanel(
+                  textInput("zip_input", "Enter Zip Code:", ""),
+                  actionButton("submit_btn", "Submit") # So far this is useless, the map changes as soon as a zip is entered
+                ),
+                mainPanel(
+                  leafletOutput("mymap", height = "80vh")  
+                )
+              )),
+      tabItem(tabName = "page2",
+              h2("Page 2"))
+    )
+  ),
+  tags$head(
+    tags$style(HTML("
+      /* Custom CSS for neutral greens theme */
+      body, .main-header, .main-sidebar, .left-side, .sidebar-menu {
+        background-color: #d2e5d2 !important;
+      }
+      .main-sidebar {
+        border-right: 1px solid #5e7f5e !important;
+      }
+      .main-header .navbar {
+        background-color: #5e7f5e !important;
+      }
+      .main-header .logo {
+        background-color: #5e7f5e !important;
+        border-bottom: 1px solid #4b664b !important;
+      }
+      .main-header .navbar .sidebar-toggle:hover {
+        background-color: #4b664b !important;
+      }
+      .sidebar-menu a:hover {
+        background-color: #4b664b !important;
+      }
+      .content-header {
+        background-color: #5e7f5e !important;
+      }
+      .content-wrapper {
+        background-color: #f0f5f0 !important;
+      }
+      .box {
+        border: 1px solid #5e7f5e !important;
+      }
+    "))
   )
 )
 
-server <- function(input, output, session) {
-  
+server <- function(input, output) {
   output$mymap <- renderLeaflet({
     zip_code <- as.numeric(input$zip_input) # make sure widget input is numeric instead of character string
     
@@ -69,9 +111,5 @@ server <- function(input, output, session) {
   })
 }
 
-# call the shinyApp function with the ui and server as arguments
 shinyApp(ui, server)
-
-
-
 
