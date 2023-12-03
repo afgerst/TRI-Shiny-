@@ -1,6 +1,7 @@
 # For creating the interactive app
 library(shiny)
 library(shinydashboard)
+library(shinyjs)
 
 # For the world maps
 library(maps) 
@@ -24,14 +25,15 @@ ui <- dashboardPage(
   dashboardHeader(title = "TRI"),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Page 1", tabName = "page1"),
-      menuItem("Page 2", tabName = "page2")
+      menuItem("Releases Near Me", tabName = "page1"),
+      menuItem("Chemical Information", tabName = "page2"),
+      menuItem("Wikipedia Link Generator test", tabName = "page3")
     )
   ),
   dashboardBody(
     tabItems(
       tabItem(tabName = "page1",
-              h2("Page 1"),
+              h2("Releases Near Me"),
               sidebarLayout(  
                 sidebarPanel(
                   textInput("zip_input", "Enter Zip Code:", ""),
@@ -42,7 +44,32 @@ ui <- dashboardPage(
                 )
               )),
       tabItem(tabName = "page2",
-              h2("Page 2"))
+              h2("Chemical Information"),
+              sidebarLayout(
+                sidebarPanel(
+                  selectInput("search_term", 
+                              "Select Chemical:",
+                              choices = unique(TRI2022$CHEMICAL),
+                              selected = "Lead"),
+                  actionButton("search_button", "Generate Link")
+                ),
+                mainPanel(
+                  textOutput("wiki_link")
+                )
+              )),
+      tabItem(tabName = "page3",
+              h2("Wikipedia Page"),
+              sidebarLayout(
+                sidebarPanel(
+                  selectInput("search2_term", 
+                              "Select Chemical:",
+                              choices = unique(TRI2022$CHEMICAL),
+                              selected = "Lead")
+                ),
+                mainPanel(
+                  uiOutput("page")
+                )
+              ))
     )
   ),
   tags$head(
@@ -108,6 +135,17 @@ server <- function(input, output) {
                                   "Chemical:", CHEMICAL))
       
     }
+  })
+  observeEvent(input$search_button, {
+    selected_term <- gsub(" ", "_", input$search_term)  # Replace spaces with underscores
+    wiki_link <- paste0("https://en.wikipedia.org/wiki/", selected_term)
+    output$wiki_link <- renderText({
+      paste("Wikipedia Link:", tags$a(href = wiki_link, target = "_blank", wiki_link))
+    })
+  })
+  output$page <- renderUI({
+    page <- paste0("https://en.wikipedia.org/wiki/", gsub(" ", "_", input$search2_term))
+    tags$iframe(src = page, height = 800, width = 900)
   })
 }
 
