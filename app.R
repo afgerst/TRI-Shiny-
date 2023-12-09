@@ -15,24 +15,88 @@ TRI2022 <- read.csv("2022_us.csv")
 
 # Filtering down to 25 variables instead of 119
 TRI2022 <- TRI2022 %>%
-  select(YEAR, FACILITY.NAME, CITY, ST, ZIP, LATITUDE, LONGITUDE, PARENT.CO.NAME, INDUSTRY.SECTOR, CHEMICAL, CLEAN.AIR.ACT.CHEMICAL,
-         CLASSIFICATION, METAL, CARCINOGEN, PBT, PFAS, UNIT.OF.MEASURE, FUGITIVE.AIR, STACK.AIR, WATER, UNDERGROUND, LANDFILLS,
+  select(YEAR, FACILITY.NAME, CITY, ST, ZIP, LATITUDE, LONGITUDE, PARENT.CO.NAME, 
+         INDUSTRY.SECTOR, CHEMICAL, CLEAN.AIR.ACT.CHEMICAL,
+         CLASSIFICATION, METAL, CARCINOGEN, PBT, PFAS, UNIT.OF.MEASURE, 
+         FUGITIVE.AIR, STACK.AIR, WATER, UNDERGROUND, LANDFILLS,
          ON.SITE.RELEASE.TOTAL, OFF.SITE.RELEASE.TOTAL, PRODUCTION.RATIO)
 
+# conversion function 
+grams2pounds <- function(grams) {
+  pounds <- grams / 453.592  # 1 pound = 453.592 grams
+  return(pounds)
+}
 
+# selecting all rows where the unit is grams
+TRI2022$UNIT.OF.MEASURE <- as.character(TRI2022$UNIT.OF.MEASURE)
+grams_rows <- TRI2022$UNIT.OF.MEASURE == "Grams"
+
+# using grams2pounds functions to convert selected rows
+TRI2022$FUGITIVE.AIR[grams_rows] <- grams2pounds(TRI2022$FUGITIVE.AIR[grams_rows])
+TRI2022$STACK.AIR[grams_rows] <- grams2pounds(TRI2022$STACK.AIR[grams_rows])
+TRI2022$WATER[grams_rows] <- grams2pounds(TRI2022$WATER[grams_rows])
+TRI2022$LANDFILLS[grams_rows] <- grams2pounds(TRI2022$LANDFILLS[grams_rows])
+TRI2022$UNDERGROUND[grams_rows] <- grams2pounds(TRI2022$UNDERGROUND[grams_rows])
+TRI2022$ON.SITE.RELEASE.TOTAL[grams_rows] <- grams2pounds(TRI2022$ON.SITE.RELEASE.TOTAL[grams_rows])
+TRI2022$OFF.SITE.RELEASE.TOTAL[grams_rows] <- grams2pounds(TRI2022$OFF.SITE.RELEASE.TOTAL[grams_rows])
+
+# replacing 0 with NA
+
+ColumnsReplace <- c("FUGITIVE.AIR", "STACK.AIR", "WATER", 
+                    "LANDFILLS", "UNDERGROUND", "ON.SITE.RELEASE.TOTAL", 
+                    "OFF.SITE.RELEASE.TOTAL")
+
+TRI2022 <- TRI2022 %>%
+  mutate(across(all_of(ColumnsReplace), ~ifelse(. == 0, NA, .)))
+
+by_state2022 <- TRI2022 %>%
+  group_by(ST) %>%
+  summarise(
+    FugitiveAir = mean(FUGITIVE.AIR, na.rm = TRUE),
+    StackAir = mean(STACK.AIR, na.rm = TRUE),
+    Water = mean(WATER, na.rm = TRUE),
+    Landfills = mean(LANDFILLS, na.rm = TRUE),
+    Underground = mean(UNDERGROUND, na.rm = TRUE),
+    OnSite = mean(ON.SITE.RELEASE.TOTAL, na.rm = TRUE),
+    OffSite = mean(OFF.SITE.RELEASE.TOTAL, na.rm = TRUE),
+  ) %>%
+  ungroup()
 
 ui <- dashboardPage(
+  
   dashboardHeader(title = "TRI"),
+  
   dashboardSidebar(
+    
     sidebarMenu(
-      menuItem("Releases Near Me", tabName = "page1"),
-      menuItem("Chemical Information", tabName = "page2"),
-      menuItem("Wikipedia Link Generator test", tabName = "page3")
+      menuItem("Background and Disclaimer", tabName = "page1"),
+      menuItem("Releases Near Me", tabName = "page2"),
+      menuItem("Chemical Information", tabName = "page3"),
+      menuItem("National Trends", tabName = "page4"),
+      menuItem("Trends by State", tabName = "page5"),
+      menuItem("Historical Trends", tabName = "page6")
     )
   ),
   dashboardBody(
+    
     tabItems(
+      
       tabItem(tabName = "page1",
+              h2("Background and Disclaimer"),
+              p("The data in used in this app is sourced from the EPA's Toxic Release Inventory, which was created as a 
+                result of the 1986 Emergency Planning and Community Right to Know Act"),
+              p("With the excpetion of the Historical Trends tab, all other information is based on the 2022 report."),
+              p("Due to the nature of this app, some data was omitted. This app should not be used to aid in any 
+                serious personal and professional decision, and is simply a tool to create a more informed public."),
+              p("If you'd like to know more about the Toxic Release Inventory and it's implications please click on the EPA logo."),
+              tags$a(href = "https://www.epa.gov/toxics-release-inventory-tri-program/what-toxics-release-inventory",
+                     tags$img(src = "EPA.png", height = 100, width = 200)
+                     ),
+              p("To see the code to create the dashboard, click the link below to github:")
+              
+              ),
+      
+      tabItem(tabName = "page2",
               h2("Releases Near Me"),
               sidebarLayout(  
                 sidebarPanel(
@@ -43,20 +107,7 @@ ui <- dashboardPage(
                   leafletOutput("mymap", height = "80vh")  
                 )
               )),
-      tabItem(tabName = "page2",
-              h2("Chemical Information"),
-              sidebarLayout(
-                sidebarPanel(
-                  selectInput("search_term", 
-                              "Select Chemical:",
-                              choices = unique(TRI2022$CHEMICAL),
-                              selected = "Lead"),
-                  actionButton("search_button", "Generate Link")
-                ),
-                mainPanel(
-                  textOutput("wiki_link")
-                )
-              )),
+      
       tabItem(tabName = "page3",
               h2("Wikipedia Page"),
               sidebarLayout(
@@ -69,9 +120,59 @@ ui <- dashboardPage(
                 mainPanel(
                   uiOutput("page")
                 )
+              )),
+      
+      tabItem(tabName = "page4",
+              h2("National Trends"),
+              sidebarLayout(
+                sidebarPanel(
+                  radioButtons("variable", "Select Release Method", 
+                               choices = c("Fugitive Air",
+                                           "Stack Air",
+                                           "Water",
+                                           "Landfills",
+                                           "Underground",
+                                           "On Site Total",
+                                           "Off Site Total"),
+                               selected = "Fugitive Air")
+                ),
+                mainPanel(
+                  leafletOutput("map2", height = "80vh")
+                )
+              )),
+      
+      tabItem(tabName = "page5",
+              h2("Trends by State"),
+              sidebarLayout(
+                sidebarPanel(
+                  selectInput("search5_term", 
+                              "Select State:",
+                              choices = unique(TRI2022$ST),
+                              selected = "SD")
+                ),
+                mainPanel(
+                  plotOutput("histogram")
+                )
+              )),
+      
+      tabItem(tabName = "page6",
+              h2("Historical Trends"),
+              sidebarLayout(
+                sidebarPanel(
+                  radioButtons("dataset", "Select Range:",
+                               choices = c("2 years",
+                                           "5 years",
+                                           "10 years",
+                                           "15 years"),
+                               selected = "2 years")
+                ),
+                mainPanel(
+                  
+                )
               ))
     )
   ),
+  
   tags$head(
     tags$style(HTML("
       /* Custom CSS for neutral greens theme */
@@ -108,7 +209,9 @@ ui <- dashboardPage(
 )
 
 server <- function(input, output) {
+  
   output$mymap <- renderLeaflet({
+    
     zip_code <- as.numeric(input$zip_input) # make sure widget input is numeric instead of character string
     
     # filter data so only points from selected zip are used
@@ -136,17 +239,33 @@ server <- function(input, output) {
       
     }
   })
-  observeEvent(input$search_button, {
-    selected_term <- gsub(" ", "_", input$search_term)  # Replace spaces with underscores
-    wiki_link <- paste0("https://en.wikipedia.org/wiki/", selected_term)
-    output$wiki_link <- renderText({
-      paste("Wikipedia Link:", tags$a(href = wiki_link, target = "_blank", wiki_link))
-    })
-  })
+  
   output$page <- renderUI({
     page <- paste0("https://en.wikipedia.org/wiki/", gsub(" ", "_", input$search2_term))
     tags$iframe(src = page, height = 800, width = 900)
   })
+
+  selected_variable <- reactive({
+    switch(input$variable,
+           "Fugitive Air" = TRI2022$FUGITIVE.AIR,
+           "Stack Air" = TRI2022$STACK.AIR,
+           "Water" = TRI2022$WATER,
+           "Landfills" = TRI2022$LANDFILLS,
+           "Underground" = TRI2022$UNDERGROUND,
+           "On Site Total" = TRI2022$ON.SITE.RELEASE.TOTAL,
+           "Off Site Total" = TRI2022$OFF.SITE.RELEASE.TOTAL
+           )
+  })
+  
+  output$map2 <- renderLeaflet({
+    leaflet() %>%
+      addTiles() %>%
+      setView(lng = -95.7129, lat = 37.0902, zoom = 4)
+  })
+  
+  
+  
+  
 }
 
 shinyApp(ui, server)
