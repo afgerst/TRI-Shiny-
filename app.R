@@ -5,7 +5,10 @@ library(shinyjs)
 
 # For the world maps
 library(maps) 
+library(ggplot2)
 library(leaflet)
+library(leaflet.extras)
+library(htmlwidgets)
 
 # For filtering data
 library(dplyr)
@@ -49,18 +52,13 @@ ColumnsReplace <- c("FUGITIVE.AIR", "STACK.AIR", "WATER",
 TRI2022 <- TRI2022 %>%
   mutate(across(all_of(ColumnsReplace), ~ifelse(. == 0, NA, .)))
 
-by_state2022 <- TRI2022 %>%
-  group_by(ST) %>%
-  summarise(
-    FugitiveAir = mean(FUGITIVE.AIR, na.rm = TRUE),
-    StackAir = mean(STACK.AIR, na.rm = TRUE),
-    Water = mean(WATER, na.rm = TRUE),
-    Landfills = mean(LANDFILLS, na.rm = TRUE),
-    Underground = mean(UNDERGROUND, na.rm = TRUE),
-    OnSite = mean(ON.SITE.RELEASE.TOTAL, na.rm = TRUE),
-    OffSite = mean(OFF.SITE.RELEASE.TOTAL, na.rm = TRUE),
-  ) %>%
-  ungroup()
+
+# State heatmap disaster
+by_state22 <- read.csv("by_state22.csv")
+
+map_data <- map_data("state")
+merged_data <- merge(map_data, by_state22, by.x = "region", by.y = "State", all.x = TRUE)
+merged_data <- merged_data[order(merged_data$order), ]
 
 ui <- dashboardPage(
   
@@ -126,7 +124,7 @@ ui <- dashboardPage(
               h2("National Trends"),
               sidebarLayout(
                 sidebarPanel(
-                  radioButtons("variable", "Select Release Method", 
+                  radioButtons("variable4", "Select Release Method", 
                                choices = c("Fugitive Air",
                                            "Stack Air",
                                            "Water",
@@ -151,7 +149,7 @@ ui <- dashboardPage(
                               selected = "SD")
                 ),
                 mainPanel(
-                  plotOutput("histogram")
+                  
                 )
               )),
       
@@ -246,21 +244,36 @@ server <- function(input, output) {
   })
 
   selected_variable <- reactive({
-    switch(input$variable,
-           "Fugitive Air" = TRI2022$FUGITIVE.AIR,
-           "Stack Air" = TRI2022$STACK.AIR,
-           "Water" = TRI2022$WATER,
-           "Landfills" = TRI2022$LANDFILLS,
-           "Underground" = TRI2022$UNDERGROUND,
-           "On Site Total" = TRI2022$ON.SITE.RELEASE.TOTAL,
-           "Off Site Total" = TRI2022$OFF.SITE.RELEASE.TOTAL
+    switch(input$variable4,
+           "Fugitive Air" = merged_data$FugitiveAir,
+           "Stack Air" = merged_data$StackAir,
+           "Water" = merged_data$Water,
+           "Landfills" = merged_data$Landfills,
+           "Underground" = merged_data$Underground,
+           "On Site Total" = merged_data$OnSite,
+           "Off Site Total" = merged_data$OffSite
            )
   })
+  
   
   output$map2 <- renderLeaflet({
     leaflet() %>%
       addTiles() %>%
-      setView(lng = -95.7129, lat = 37.0902, zoom = 4)
+      setView(lng = -95.7129, lat = 37.0902, zoom = 4)  # Centered on the United States
+  })
+  
+  # Add heatmap layer to the map
+  observe({
+    leafletProxy("map2") %>%
+      clearHeatmap() %>%
+      addHeatmap(
+        data = merged_data,
+        lng = ~long,
+        lat = ~lat,
+        intensity = ~selected_variable(),
+        blur = 30,
+        max = max(selected_variable())
+      )
   })
   
   
