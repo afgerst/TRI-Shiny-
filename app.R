@@ -16,8 +16,11 @@ library(plotly)
 # For filtering data
 library(dplyr)
 
-# Reading in data file
+# Reading in data file - Raw data from EPA website
 TRI2022 <- read.csv("2022_us.csv")
+
+# Data from 2007, 2012, 2017, 2020, 2022 cleaned in Excel to make life easier
+# Only contains the year, release method, mean, and standard error data
 TRIHist <- read.csv("historical.csv")
 
 # Filtering down to 25 variables instead of 119
@@ -58,9 +61,12 @@ TRI2022 <- TRI2022 %>%
 
 
 # State heatmap disaster
-by_state22 <- read.csv("by_state22.csv")
+by_state22 <- read.csv("by_state22.csv") # Some data cleaning in excel
 
+# lat long data from maps library
 map_data <- map_data("state")
+
+# merge and re-organize the two datasets
 merged_data <- merge(map_data, by_state22, by.x = "region", by.y = "State", all.x = TRUE)
 merged_data <- merged_data[order(merged_data$order), ]
 
@@ -96,7 +102,7 @@ ui <- dashboardPage(
               
               tags$a(href = "https://www.epa.gov/toxics-release-inventory-tri-program/what-toxics-release-inventory",
                      target = "_blank",
-                     tags$img(src = "EPA.png", alt = "EPA Toxic Release Inventory")
+                     tags$img(src = "EPA.png", alt = "EPA Toxic Release Inventory") # PNG still not working :(
                      ),
               p("To see the code to create the dashboard, click the link below to github:"),
               tags$a(href = "https://github.com/afgerst/TRI-Shiny-",
@@ -161,7 +167,8 @@ ui <- dashboardPage(
                 ),
                 mainPanel(
                   plotlyOutput("pieChart"),
-                  plotlyOutput("IndustryBar")
+                  plotlyOutput("IndustryBar"),
+                  plotOutput("TotalReleases")
                 )
               )),
       
@@ -183,6 +190,7 @@ ui <- dashboardPage(
   ),
   
   tags$head(
+    # CSS code for theme from Chat gpt 3.5
     tags$style(HTML("
       /* Custom CSS for neutral greens theme */
       body, .main-header, .main-sidebar, .left-side, .sidebar-menu {
@@ -250,11 +258,13 @@ server <- function(input, output) {
     }
   })
   
+  # Creates a URL out of the selected chemcial, and opens the wiki page within the app
   output$page <- renderUI({
     page <- paste0("https://en.wikipedia.org/wiki/", gsub(" ", "_", input$search2_term))
     tags$iframe(src = page, height = 800, width = 900)
   })
   
+  # Default view of the United States when nothing is selected
   output$map2 <- renderLeaflet({
     leaflet() %>%
       addTiles() %>%
@@ -269,6 +279,8 @@ server <- function(input, output) {
         data = merged_data,
         lng = ~long,
         lat = ~lat,
+        # Since the data set is switching between columns and not within a column, 
+        # need to define what the input is referring to.
         intensity = switch(input$variable4,
                            "Fugitive Air" = merged_data$FugitiveAir,
                            "Stack Air" = merged_data$StackAir,
@@ -282,10 +294,13 @@ server <- function(input, output) {
       )
   })
   
+  
+  # create a filtered data set depending on the state selected
   filteredData <- reactive({
     TRI2022[TRI2022$ST == input$search5_term, ]
   })
   
+  # pie chart of carcinogens
   output$pieChart <- renderPlotly({
     filteredData <- filteredData()
     counts <- count(filteredData, CARCINOGEN)
@@ -294,6 +309,7 @@ server <- function(input, output) {
     pie_chart
   })
   
+  # bar chart of industries
   output$IndustryBar <- renderPlotly({
     filteredData <- filteredData()
     industry_counts <- table(filteredData$INDUSTRY.SECTOR)
@@ -305,6 +321,21 @@ server <- function(input, output) {
     bar_chart
   })
   
+ output$TotalReleases <- renderPlot({
+   bar_data <- filteredData() %>%
+     select("FUGITIVE.AIR", "STACK.AIR", "WATER", "LANDFILLS", "UNDERGROUND", "ON.SITE.RELEASE.TOTAL", "OFF.SITE.RELEASE.TOTAL") %>%
+     summarise_all(~ sum(ifelse(is.na(.), 0, .)))
+   
+   bar_names <- colnames(bar_data)
+   bar_values <- as.numeric(bar_data)
+   
+   barplot(bar_values, names.arg = bar_names, col = "skyblue",
+           main = paste("Total Releases for", input$search5_term),
+           xlab = "Release Method", ylab = "Total (lbs)", las = 2)
+ })
+  
+  
+  # Mean SEM chart of release types over time
   output$SEM <- renderPlot({
     g <- TRIHist %>% 
       filter(year %in% input$year_input)
