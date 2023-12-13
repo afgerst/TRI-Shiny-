@@ -98,16 +98,14 @@ ui <- dashboardPage(
               p("With the excpetion of the Historical Trends tab, all other information is based on the 2022 report."),
               p("Due to the nature of this app, some data was omitted. This app should not be used to aid in any 
                 serious personal and professional decision, and is simply a tool to create a more informed public."),
-              p("If you'd like to know more about the Toxic Release Inventory and it's implications please click on the link below."),
-              
-              tags$a(href = "https://www.epa.gov/toxics-release-inventory-tri-program/what-toxics-release-inventory",
-                     target = "_blank",
-                     tags$img(src = "EPA.png", alt = "EPA Toxic Release Inventory") # PNG still not working :(
-                     ),
+              p("If you'd like to know more about the Toxic Release Inventory and it's implications please click on the EPA logo below."),
+              tags$a(
+                href = "https://www.epa.gov/toxics-release-inventory-tri-program/what-toxics-release-inventory",
+                tags$img(src = "https://seeklogo.com/images/E/Environmental_Protection_Agency-logo-6E0F9CEE62-seeklogo.com.png")
+              ),
               p("To see the code to create the dashboard, click the link below to github:"),
               tags$a(href = "https://github.com/afgerst/TRI-Shiny-",
-                     target = "_blank",
-                     tags$img(alt = "Github")
+                     tags$img(src = "https://1000logos.net/wp-content/uploads/2021/05/GitHub-logo-500x281.png")
               )
               ),
       
@@ -125,7 +123,7 @@ ui <- dashboardPage(
               )),
       
       tabItem(tabName = "page3",
-              h2("Wikipedia Page"),
+              h2("Choose a chemical to learn more about"),
               sidebarLayout(
                 sidebarPanel(
                   selectInput("search2_term", 
