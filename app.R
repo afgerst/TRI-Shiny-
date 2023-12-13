@@ -2,19 +2,23 @@
 library(shiny)
 library(shinydashboard)
 library(shinyjs)
+library(png)
 
 # For the world maps
 library(maps) 
 library(ggplot2)
 library(leaflet)
 library(leaflet.extras)
-library(htmlwidgets)
+
+# Plots
+library(plotly)
 
 # For filtering data
 library(dplyr)
 
 # Reading in data file
 TRI2022 <- read.csv("2022_us.csv")
+TRIHist <- read.csv("historical.csv")
 
 # Filtering down to 25 variables instead of 119
 TRI2022 <- TRI2022 %>%
@@ -60,6 +64,8 @@ map_data <- map_data("state")
 merged_data <- merge(map_data, by_state22, by.x = "region", by.y = "State", all.x = TRUE)
 merged_data <- merged_data[order(merged_data$order), ]
 
+
+
 ui <- dashboardPage(
   
   dashboardHeader(title = "TRI"),
@@ -86,13 +92,19 @@ ui <- dashboardPage(
               p("With the excpetion of the Historical Trends tab, all other information is based on the 2022 report."),
               p("Due to the nature of this app, some data was omitted. This app should not be used to aid in any 
                 serious personal and professional decision, and is simply a tool to create a more informed public."),
-              p("If you'd like to know more about the Toxic Release Inventory and it's implications please click on the EPA logo."),
-              tags$a(href = "https://www.epa.gov/toxics-release-inventory-tri-program/what-toxics-release-inventory",
-                     tags$img(src = "EPA.png", height = 100, width = 200)
-                     ),
-              p("To see the code to create the dashboard, click the link below to github:")
+              p("If you'd like to know more about the Toxic Release Inventory and it's implications please click on the link below."),
               
+              tags$a(href = "https://www.epa.gov/toxics-release-inventory-tri-program/what-toxics-release-inventory",
+                     target = "_blank",
+                     tags$img(src = "EPA.png", alt = "EPA Toxic Release Inventory")
+                     ),
+              p("To see the code to create the dashboard, click the link below to github:"),
+              tags$a(href = "https://github.com/afgerst/TRI-Shiny-",
+                     target = "_blank",
+                     tags$img(alt = "Github")
+              )
               ),
+      
       
       tabItem(tabName = "page2",
               h2("Releases Near Me"),
@@ -131,8 +143,7 @@ ui <- dashboardPage(
                                            "Landfills",
                                            "Underground",
                                            "On Site Total",
-                                           "Off Site Total"),
-                               selected = "Fugitive Air")
+                                           "Off Site Total"))
                 ),
                 mainPanel(
                   leafletOutput("map2", height = "80vh")
@@ -149,7 +160,8 @@ ui <- dashboardPage(
                               selected = "SD")
                 ),
                 mainPanel(
-                  
+                  plotlyOutput("pieChart"),
+                  plotlyOutput("IndustryBar")
                 )
               )),
       
@@ -157,15 +169,14 @@ ui <- dashboardPage(
               h2("Historical Trends"),
               sidebarLayout(
                 sidebarPanel(
-                  radioButtons("dataset", "Select Range:",
-                               choices = c("2 years",
-                                           "5 years",
-                                           "10 years",
-                                           "15 years"),
-                               selected = "2 years")
+                  selectInput("year_input",
+                              "Select Year(s):",
+                              choices = unique(TRIHist$year),
+                              multiple = TRUE,
+                              selected = "2022")
                 ),
                 mainPanel(
-                  
+                  plotOutput("SEM")
                 )
               ))
     )
@@ -233,7 +244,8 @@ server <- function(input, output) {
                    # when a user clicks on a maker info about the facility, industry, and chemical is listed
                    popup = ~paste("Facility:", FACILITY.NAME, "<br>",
                                   "Industry:", INDUSTRY.SECTOR, "<br>",
-                                  "Chemical:", CHEMICAL))
+                                  "Chemical:", CHEMICAL, "<br>",
+                                  "Carcinogen:", CARCINOGEN))
       
     }
   })
@@ -242,19 +254,6 @@ server <- function(input, output) {
     page <- paste0("https://en.wikipedia.org/wiki/", gsub(" ", "_", input$search2_term))
     tags$iframe(src = page, height = 800, width = 900)
   })
-
-  selected_variable <- reactive({
-    switch(input$variable4,
-           "Fugitive Air" = merged_data$FugitiveAir,
-           "Stack Air" = merged_data$StackAir,
-           "Water" = merged_data$Water,
-           "Landfills" = merged_data$Landfills,
-           "Underground" = merged_data$Underground,
-           "On Site Total" = merged_data$OnSite,
-           "Off Site Total" = merged_data$OffSite
-           )
-  })
-  
   
   output$map2 <- renderLeaflet({
     leaflet() %>%
@@ -270,14 +269,56 @@ server <- function(input, output) {
         data = merged_data,
         lng = ~long,
         lat = ~lat,
-        intensity = ~selected_variable(),
-        blur = 30,
-        max = max(selected_variable())
+        intensity = switch(input$variable4,
+                           "Fugitive Air" = merged_data$FugitiveAir,
+                           "Stack Air" = merged_data$StackAir,
+                           "Water" = merged_data$Water,
+                           "Landfills" = merged_data$Landfills,
+                           "Underground" = merged_data$Underground,
+                           "On Site Total" = merged_data$OnSite,
+                           "Off Site Total" = merged_data$OffSite
+        ),
+        blur = 30
       )
   })
   
+  filteredData <- reactive({
+    TRI2022[TRI2022$ST == input$search5_term, ]
+  })
   
+  output$pieChart <- renderPlotly({
+    filteredData <- filteredData()
+    counts <- count(filteredData, CARCINOGEN)
+    pie_chart <- plot_ly(counts, labels = ~CARCINOGEN, values = ~n, type = 'pie')
+    pie_chart <- pie_chart %>% layout(title = paste("Carcinogen Distribution in", input$search5_term))
+    pie_chart
+  })
   
+  output$IndustryBar <- renderPlotly({
+    filteredData <- filteredData()
+    industry_counts <- table(filteredData$INDUSTRY.SECTOR)
+    bar_chart <- plot_ly(x = names(industry_counts), y = industry_counts, type = "bar",
+                         marker = list(color = "darkgreen")) %>%
+                            layout(title = "Occurences of Industries",
+                            xaxis = list(title = "Industries"),
+                             yaxis = list(title = "Frequency"))
+    bar_chart
+  })
+  
+  output$SEM <- renderPlot({
+    g <- TRIHist %>% 
+      filter(year %in% input$year_input)
+    pd <- position_dodge(0.2)
+    g1 <- ggplot(g, aes(x = year, y = mean, group = release, color = release)) + 
+           geom_point(position = pd, size = 3) + 
+           geom_line(position = pd, linewidth = 1) +
+           geom_errorbar(aes(ymin = mean - standarderror,
+                              ymax = mean + standarderror),
+                          width = 0.1,
+                          position = pd) +
+          labs(y = "Average Release (lbs)", x = "Year")
+    g1
+  }) 
   
 }
 
